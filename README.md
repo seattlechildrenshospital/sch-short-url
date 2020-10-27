@@ -1,68 +1,154 @@
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+<!-- Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+SPDX-License-Identifier: MIT-0
 
-## Available Scripts
+Permission is hereby granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the "Software"), to deal in the Software
+without restriction, including without limitation the rights to use, copy, modify,
+merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so.
 
-In the project directory, you can run:
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. -->
 
-### `yarn start`
+# SCH URL Shortener
+This app will create a shortened URL using S3 redirect features.
 
-Runs the app in the development mode.<br />
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+For more information about the url shortener read the following blogs:
+1. [Private URL Shortener](https://aws.amazon.com/blogs/compute/build-a-serverless-private-url-shortener/)
+1. [Building a serverless URL shortener app without AWS Lambda – part 1](https://aws.amazon.com/blogs/compute/building-a-serverless-url-shortener-app-without-lambda-part-1)
+1. [Building a serverless URL shortener app without AWS Lambda – part 2](https://aws.amazon.com/blogs/compute/building-a-serverless-url-shortener-app-without-lambda-part-2)
+1. [Building a serverless URL shortener app without AWS Lambda – part 3](https://aws.amazon.com/blogs/compute/building-a-serverless-url-shortener-app-without-lambda-part-3)
 
-The page will reload if you make edits.<br />
-You will also see any lint errors in the console.
+## The Backend
 
-### `yarn test`
+### Services Used
+* <a href="https://aws.amazon.com/api-gateway/" target="_blank">Amazon API Gateway</a>
+* <a href="https://aws.amazon.com/cognito/" target="_blank">Amazon Cognito</a>
+* <a href="https://aws.amazon.com/lambda/" target="_bank">Amazon Lambda</a>
+* <a href="https://aws.amazon.com/amplify/console/" target="_blank">AWS Amplify Console</a>
+* <a href="https://aws.amazon.com/cloudfront/" target="_blank">Amazon CloudFront</a> *Will cause a lengthy deployment time. See note under **Deploying**
+* <a href="https://aws.amazon.com/s3/" target="_blank">Amazon S3</a>
 
-Launches the test runner in the interactive watch mode.<br />
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
 
-### `yarn build`
+### Requirements for deployment
+* <a href="https://aws.amazon.com/cli/" target="_blank">AWS CLI</a>
+* <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html" target="_blank">AWS SAM CLI v0.37.0+</a>
+* A GitHub personal access token with the *repo* scope as shown below. Instructions for creating a personal access token can be found <a href="https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line#creating-a-token" target="blank">here</a>
 
-Builds the app for production to the `build` folder.<br />
-It correctly bundles React in production mode and optimizes the build for the best performance.
+    ![Personal access token scopes](./assets/pat.png)
 
-The build is minified and the filenames include the hashes.<br />
-Your app is ready to be deployed!
+    **Be sure and store you new token in a place that you can find it.**
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### Deploying
 
-### `yarn eject`
+***Note: This stack includes an Amazon CloudFront distribution which can take around 30 minutes to create. Don't be alarmed if the deploy seems to hang for a long time.***
+In the terminal, use the SAM CLI guided deployment the first time you deploy
+```bash
+sam deploy -g
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+#### Choose options
+You can choose the default for all options except *GithubRepository* and **
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```bash
+## The name of the CloudFormation stack
+Stack Name [URLShortener]:
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+## The region you want to deploy in
+AWS Region [us-west-2]:
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+## The name of the application (lowercase no spaces). This must be globally unique
+Parameter AppName [shortener]:
 
-## Learn More
+## Enables public client and local client for testing. (Less secure)
+Parameter UseLocalClient [false]:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## GitHub forked repository URL
+Parameter GithubRepository []:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Github Personal access token
+Parameter PersonalAccessToken:
 
-### Code Splitting
+## Shows you resources changes to be deployed and requires a 'Y' to initiate deploy
+Confirm changes before deploy [y/N]:
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/code-splitting
+## SAM needs permission to be able to create roles to connect to the resources in your template
+Allow SAM CLI IAM role creation [Y/n]:
 
-### Analyzing the Bundle Size
+## Save your choice for later deployments
+Save arguments to samconfig.toml [Y/n]:
+```
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size
+SAM will then deploy the AWS CloudFormation stack to your AWS account and provide required outputs for the included client.
 
-### Making a Progressive Web App
+After the first deploy you may re-deploy using `sam deploy` or redeploy with different options using `sam deploy -g`.
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app
+## The Client
 
-### Advanced Configuration
+*The client can also be run locally for debugging. Instructions can be found [here](./client/README.md).*
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/advanced-configuration
+The client is a React application that interfaces with the backend and allows you to authenticate and manage URL links. The client is hosted using Amplify Console. To avoid circular dependencies, we need to provide some information for the client after stack is built. The information needed is provided at the end of the deploy process. If you do not have the information you can run the following:
 
-### Deployment
+```bash
+aws cloudformation describe-stacks --stack-name URLShortener
+```
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/deployment
+We need to add this information to the environment variables for the Amplify Console app. There are two options for adding the variables.
 
-### `yarn build` fails to minify
+#### Option 1: using the AWS CLI (Update the *\<values\>* to reflect the information returned from the deployment.)
 
-This section has moved here: https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify
+```bash
+aws amplify update-app --app-id <MyAmplifyAppId> --environment-variables \
+REACT_APP_NAME=<ReactAppName>\
+,REACT_APP_CLIENT_ID=<REACT_APP_CLIENT_ID>\
+,REACT_APP_API_ROOT=<REACT_APP_API_ROOT>\
+,REACT_APP_AUTH_DOMAIN=<REACT_APP_AUTH_DOMAIN>
+```
+
+*Also available in the stack output as **AmplifyEnvironmentUpdateCommand***
+
+#### Option 2: Amplify Console page
+1. Open the [Amplify Console page](https://us-west-2.console.aws.amazon.com/amplify/home)
+1. On the left side, under **All apps**, choose *Url-Shortner-Client*
+1. Under **App settings** choose *Environment variables*
+1. Choose the *manage variables* button
+1. Choose *add variable*
+1. Fill in the *variable* and it's corresponding *Value*
+1. Leave defaults for *Branches* and *Actions*
+1. Repeat for all four variables
+1. Choose save
+
+### Starting the first deployment
+After deploying the CloudFormation template, you need to go into the Amplify Console and trigger a build. The CloudFormation template can provision the resources, but can’t trigger a build since it creates resources but cannot trigger actions. This can be done via the AWS CLI.
+
+#### Option 1: Using the AWS CLI (Update the *\<values\>* to reflect the information returned from the deployment.)
+
+```bash
+aws amplify start-job --app-id <MyAmplifyAppId> --branch-name master --job-type RELEASE
+```
+*Also available in the stack output as **AmplifyDeployCommand***
+
+To check on the status, you can view it on the AWS Amplify Console or run:
+```bash
+aws amplify get-job --app-id <MyAmplifyAppId> --branch-name master --job-id <JobId>
+```
+
+#### Option 2: Amplify Console page
+1. Open the <a href="https://us-west-2.console.aws.amazon.com/amplify/home" target="_blank">Amplify Console page</a>
+1. On the left side, under **All apps**, choose *Url-Shortner-Client*
+1. Click *Run build*
+
+*Note: this is only required for the first build subsequent client builds will be triggered when updates are committed to your forked repository.
+
+## Cleanup
+1. Open the <a href="https://us-west-2.console.aws.amazon.com/cloudformation/home" target="_blank">CloudFormation console</a>
+1. Locate a stack named *URLShortener*
+1. Select the radio option next to it
+1. Select **Delete**
+1. Select **Delete stack** to confirm
+
+*Note: If you opted to have access logs (on by default), you may have to delete the S3 bucket manually.
