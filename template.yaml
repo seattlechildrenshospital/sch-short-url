@@ -210,7 +210,7 @@ Resources:
               commands:
                 - yarn run build
           artifacts:
-            baseDirectory: client/dist
+            baseDirectory: client/build
             files:
               - '**/*'
           cache:

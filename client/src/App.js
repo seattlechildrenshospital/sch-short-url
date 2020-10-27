@@ -61,10 +61,10 @@ function App() {
         let json_1 = response.data;
         if (json_1.id_token) {
           localStorage.setItem('cognitoIdentityToken', json_1.id_token);
-          dispatch(authorize);
+          dispatch(authorize());
         }
       } catch (e) {
-        dispatch(deauthorize);
+        dispatch(deauthorize());
       }
     } else {
       return new Promise((res) => {
@@ -90,13 +90,13 @@ function App() {
       if (json_1.id_token) {
         localStorage.setItem('cognitoIdentityToken', json_1.id_token);
         localStorage.setItem('cognitoRefreshToken', json_1.refresh_token);
-        dispatch(authorize);
+        dispatch(authorize());
       }
       let newQuery = Object.assign({}, query);
       delete newQuery.code;
       history.replace({ newQuery });
     } catch (e) {
-      dispatch(deauthorize);
+      dispatch(deauthorize());
     }
   };
 
@@ -157,7 +157,7 @@ function App() {
       </section>
       <section className="section">
         <div className="container">
-          {!authorized && (
+          {authorized && (
             <div>
               <Switch>
                 <Route exact path="/">

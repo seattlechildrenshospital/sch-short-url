@@ -53,7 +53,7 @@ function Dashboard() {
         },
       })
       .then((response) => dispatch(hydrateLinks(response.data)))
-      .catch(() => dispatch(drainLinks));
+      .catch(() => dispatch(drainLinks()));
   }
 
   function createLink() {
