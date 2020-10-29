@@ -46,6 +46,8 @@ function Dashboard() {
   }
 
   function fetchData() {
+    dispatch(addLink({ id: 'CRY"', url: 'cry.com' }));
+    console.log(links);
     axios
       .get(`${apiUrl}/app`, {
         headers: {
@@ -91,11 +93,11 @@ function Dashboard() {
           toggleModal();
           dispatch(updateLink(response.data, currentIndex));
         } else {
-          alert('There was an issue deleting your SlipLink');
+          alert('There was an issue deleting your link');
         }
       })
       .catch(() => {
-        alert('There was an issue deleting your SlipLink');
+        alert('There was an issue deleting your link');
       });
   }
 
@@ -111,7 +113,7 @@ function Dashboard() {
           if (response.status === 200) {
             dispatch(removeLink(ind));
           } else {
-            alert('There was an issue deleting your SlipLink');
+            alert('There was an issue deleting your link');
           }
         })
         .catch((err) => {

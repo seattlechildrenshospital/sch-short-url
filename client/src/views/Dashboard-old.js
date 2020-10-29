@@ -80,7 +80,7 @@ function Dashboard() {
         },
       })
       .then((response) => dispatch(hydrateLinks(response.data)))
-      .catch(() => dispatch(drainLinks));
+      .catch(() => dispatch(drainLinks()));
   }
 
   const onEnterHandler = (e) => {

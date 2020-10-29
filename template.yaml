@@ -135,11 +135,11 @@ Resources:
         - COGNITO
       CallbackURLs:
         - !Join [".", [https://master, !GetAtt AmplifyApp.DefaultDomain]]
-        - !If [IsLocal, http://localhost:8080, !Ref "AWS::NoValue"]
+        - !If [IsLocal, http://localhost:3000, !Ref "AWS::NoValue"]
         - !If [HasCustomDomain, !Ref CustomDomain, !Ref "AWS::NoValue"]
       LogoutURLs:
         - !Join [".", [https://master, !GetAtt AmplifyApp.DefaultDomain]]
-        - !If [IsLocal, http://localhost:8080, !Ref "AWS::NoValue"]
+        - !If [IsLocal, http://localhost:3000, !Ref "AWS::NoValue"]
         - !If [HasCustomDomain, !Ref CustomDomain, !Ref "AWS::NoValue"]
       AllowedOAuthFlowsUserPoolClient: true
       AllowedOAuthFlows:
