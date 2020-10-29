@@ -14,9 +14,9 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Functionless URL Shortener
+Description: Functionless URL Shortner
 
 ###################################################################################################
 ##   Template Parameters                                                                         ##
@@ -25,11 +25,11 @@ Parameters:
   AppName:
     Type: String
     Description: Name of application (no spaces). Value must be globally unique
-    Default: SCH-url-shortener
+    Default: sch-url-shortener
   UseLocalClient:
     Type: String
     Description: Enables public client and local client for testing. (Less secure)
-    Default: "false"
+    Default: 'false'
   GithubRepository:
     Type: String
     Description: Forked GitHub repository URL
@@ -38,22 +38,190 @@ Parameters:
     Type: String
     Description: Github personal access token
     NoEcho: true
-  CustomDomain:
+  S3BucketName:
     Type: String
-    Description: Custom domain added to client # only configures cognito for now. Manually handle domain on amplify console for client
-    Default: none
-
+    Default: "schshorturlbucket"
+    Description: Enter the Amazon S3 bucket to use for the URL shortener, or leave empty to create a new bucket with automatically generated name. The S3 bucket is kept after you delete this template.
+  CnameAlias:
+    Type: String
+    Default: "bit-beta.ehealthapplications.com"
+    Description: Enter the user facing CNAME/Alias for shorturl.
+  URLExpiration:
+    Type: Number
+    Default: 7
+    Description: Expiration in days for short URLs. After this delay, short URLs will be automatically deleted.
 ###################################################################################################
 ##   Template Conditions                                                                         ##
 ###################################################################################################
 Conditions:
-  IsLocal: !Equals [!Ref UseLocalClient, "true"]
-  HasCustomDomain: !Not [!Equals [!Ref CustomDomain, "none"]]
-
+  IsLocal:
+    !Equals [!Ref UseLocalClient, 'true']
+  CreateNewBucket: !Equals ["", !Ref S3BucketName]
 ###################################################################################################
 ##   Template Resources                                                                          ##
 ###################################################################################################
 Resources:
+  ## S3 Bucket
+  S3BucketForURLs:
+    Type: "AWS::S3::Bucket"
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !If [ "CreateNewBucket", !Ref "AWS::NoValue", !Ref S3BucketName ]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      WebsiteConfiguration:
+        IndexDocument: "index.html"
+      LifecycleConfiguration:
+        Rules:
+          -
+            Id: DisposeShortUrls
+            ExpirationInDays: !Ref URLExpiration
+            Prefix: "u/"
+            Status: Enabled
+  ######################################################################
+  #
+  # Lambda function for the URL Shortener
+  #
+  ######################################################################
+  LambdaShortener:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: index.handler
+      MemorySize: 384
+      Role: !GetAtt LambdaExecRole.Arn
+      Runtime: python3.6
+      Timeout: 10
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref S3BucketForURLs
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          import random
+          import string
+          import botocore
+          from botocore.client import Config
+
+          AWS_REGION = os.environ['AWS_REGION']
+
+          DEBUG = True
+
+          # generate a random string of n characters, lowercase and numbers
+          def generate_random(n):
+            return ''.join(random.SystemRandom().choice(string.ascii_lowercase + string.digits) for _ in range(n))
+
+          # checks whether an object already exists in the Amazon S3 bucket
+          # we do a head_object, if it throws a 404 error then the object does not exist
+          def exists_s3_key(s3_client, bucket, key):
+            try:
+              resp = s3_client.head_object(Bucket=bucket, Key=key)
+              return True
+            except botocore.exceptions.ClientError as e:
+              # if ListBucket access is granted, then missing file returns 404
+              if (e.response['Error']['Code'] == "404"): return False
+              # if ListBucket access is not granted, then missing file returns 403 (which is the case here)
+              if (e.response['Error']['Code'] == "403"): return False
+              print(e.response)
+              raise e     # otherwise re-raise the exception
+
+          def handler(event, context):
+            print(event)
+            BUCKET_NAME = os.environ['S3_BUCKET']   # from env variable
+
+            native_url = event.get("url_long")
+            cdn_prefix = event.get("cdn_prefix")
+
+            ### Generate a short id for the redirect
+            # check if short_key object already exists - collision could occur
+            s3 = boto3.client('s3', config=Config(signature_version='s3v4'))
+
+            while (True):
+              short_id = generate_random(7)
+              short_key = "u/" + short_id
+              if not(exists_s3_key(s3, BUCKET_NAME, short_key)):
+                break
+              else:
+                print("We got a short_key collision: " + short_key + ". Retrying.")
+
+            print("We got a valid short_key: " + short_key)
+
+            ### Third step: create the redirection object in the S3 bucket
+            resp = s3.put_object(Bucket=BUCKET_NAME,
+                                 Key=short_key,
+                                 Body=b"",
+                                 WebsiteRedirectLocation=native_url,
+                                 ContentType="text/plain")
+
+            public_short_url = "https://" + cdn_prefix + "/" + short_id;
+
+            return { "url_short": public_short_url, "url_long": native_url }
+  ######################################################################
+  #
+  # Lambda function for the URL Redirection
+  #
+  ######################################################################
+  LambdaRedirector:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: index.handler
+      MemorySize: 384
+      Role: !GetAtt LambdaExecRole.Arn
+      Runtime: python3.6
+      Timeout: 5
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref S3BucketForURLs
+      Code:
+        ZipFile: |
+          import os
+          import boto3
+          from botocore.client import Config
+
+          S3_BUCKET = os.environ['S3_BUCKET']
+
+          def handler(event, context):
+            print(event)
+            short_url = "u/" + event.get("Key")
+
+            s3 = boto3.client('s3', config=Config(signature_version='s3v4'))
+            resp = s3.head_object(Bucket=S3_BUCKET, Key=short_url)
+
+            print(resp)
+            redirect_url = resp.get('WebsiteRedirectLocation')
+            if redirect_url:
+              print("Redirect: " + redirect_url)
+              return { "Redirect": redirect_url }
+            else:
+              return { "Error": "Unable to load redirect url for object: s3://" + S3_BUCKET + "/" + short_url }
+
+  LambdaExecRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      ManagedPolicyArns:
+      - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        -
+          PolicyName: LambdaExecRoleUrlShortener
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: Allow
+                Action: [ "s3:GetObject", "s3:PutObject" ]
+                Resource: !Sub "arn:aws:s3:::${S3BucketForURLs}/u/*"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Sid: ""
+            Effect: Allow
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+
   ##   API Gateway
   SiteAPI:
     Type: AWS::Serverless::Api
@@ -70,14 +238,15 @@ Resources:
           ThrottlingRateLimit: 2000
           ThrottlingBurstLimit: 1000
         - HttpMethod: "GET"
-          ResourcePath: "/{linkId}"
+          ResourcePath: "/{key}"
           ThrottlingRateLimit: 10000
           ThrottlingBurstLimit: 4000
+      Name: !Ref LambdaShortener
       DefinitionBody:
-        "Fn::Transform":
-          Name: "AWS::Include"
+        'Fn::Transform':
+          Name: 'AWS::Include'
           Parameters:
-            Location: "./api.yaml"
+            Location: './api.yaml'
 
   ##   URL DynamoDB Table
   LinkTable:
@@ -134,13 +303,11 @@ Resources:
       SupportedIdentityProviders:
         - COGNITO
       CallbackURLs:
-        - !Join [".", [https://master, !GetAtt AmplifyApp.DefaultDomain]]
+        - !Join [ ".", [ https://master, !GetAtt AmplifyApp.DefaultDomain ]]
         - !If [IsLocal, http://localhost:3000, !Ref "AWS::NoValue"]
-        - !If [HasCustomDomain, !Ref CustomDomain, !Ref "AWS::NoValue"]
       LogoutURLs:
-        - !Join [".", [https://master, !GetAtt AmplifyApp.DefaultDomain]]
+        - !Join [ ".", [ https://master, !GetAtt AmplifyApp.DefaultDomain ]]
         - !If [IsLocal, http://localhost:3000, !Ref "AWS::NoValue"]
-        - !If [HasCustomDomain, !Ref CustomDomain, !Ref "AWS::NoValue"]
       AllowedOAuthFlowsUserPoolClient: true
       AllowedOAuthFlows:
         - code
@@ -153,29 +320,34 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
+        Aliases:
+          - !Ref CnameAlias
+        ViewerCertificate:
+           AcmCertificateArn: "arn:aws:acm:us-east-1:462943309901:certificate/db8e2c15-e9eb-4193-8b76-a9e7ba9626bd"
+           MinimumProtocolVersion: "TLSv1"
+           SslSupportMethod: "sni-only"
         Comment: URL Shortener CDN
         DefaultCacheBehavior:
-          AllowedMethods:
-            ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+          AllowedMethods: ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
           CachedMethods: ["GET", "HEAD", "OPTIONS"]
           Compress: true
           DefaultTTL: 0
           ForwardedValues:
             Headers:
-              - Access-Control-Request-Headers
-              - Access-Control-Request-Method
-              - Origin
-              - Authorization
+            - Access-Control-Request-Headers
+            - Access-Control-Request-Method
+            - Origin
+            - Authorization
             QueryString: false
           TargetOriginId: "URLShortenerAPIGW"
           ViewerProtocolPolicy: redirect-to-https
         CustomErrorResponses:
-          - ErrorCachingMinTTL: 0
-            ErrorCode: 400
-          - ErrorCachingMinTTL: 1
-            ErrorCode: 403
-          - ErrorCachingMinTTL: 5
-            ErrorCode: 500
+        - ErrorCachingMinTTL: 0
+          ErrorCode: 400
+        - ErrorCachingMinTTL: 1
+          ErrorCode: 403
+        - ErrorCachingMinTTL: 5
+          ErrorCode: 500
         Logging:
           Bucket: !GetAtt CloudFrontAccessLogsBucket.DomainName
         Enabled: true
@@ -185,6 +357,22 @@ Resources:
             DomainName: !Sub ${SiteAPI}.execute-api.${AWS::Region}.amazonaws.com
             Id: "URLShortenerAPIGW"
             OriginPath: /Prod
+
+  # Invoke permission for Lambda
+  LambdaShortenerInvokePermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !GetAtt LambdaShortener.Arn
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SiteAPI}/*/POST/admin_shrink_url"
+  LambdaRedirectorInvokePermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !GetAtt LambdaRedirector.Arn
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SiteAPI}/*/GET/*"
 
   ##   CloudFront access logs storage
   CloudFrontAccessLogsBucket:
@@ -205,12 +393,12 @@ Resources:
             preBuild:
               commands:
                 - cd client
-                - yarn install
+                - npm ci
             build:
               commands:
-                - yarn run build
+                - npm run build
           artifacts:
-            baseDirectory: client/build
+            baseDirectory: client/dist
             files:
               - '**/*'
           cache:
@@ -227,9 +415,9 @@ Resources:
       Description: Master Branch
       EnableAutoBuild: true
 
-  ###################################################################################################
-  ##   IAM Roles                                                                                   ##
-  ###################################################################################################
+###################################################################################################
+##   IAM Roles                                                                                   ##
+###################################################################################################
 
   ##   Dynamo DB Read Role
   DDBReadRole:
@@ -238,7 +426,8 @@ Resources:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Effect: "Allow"
+          -
+            Effect: "Allow"
             Principal:
               Service: "apigateway.amazonaws.com"
             Action:
@@ -246,18 +435,18 @@ Resources:
       Policies:
         - PolicyName: DDBReadPolicy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               Action:
-                - dynamodb:GetItem
-                - dynamodb:Scan
-                - dynamodb:Query
+              - dynamodb:GetItem
+              - dynamodb:Scan
+              - dynamodb:Query
               Effect: Allow
               Resource:
                 - !GetAtt LinkTable.Arn
                 - !Sub
                   - ${TableArn}/index/*
-                  - { TableArn: !GetAtt LinkTable.Arn }
+                  - {TableArn: !GetAtt LinkTable.Arn}
 
   ##   Dynamo DB Read/Write Role
   DDBCrudRole:
@@ -266,7 +455,8 @@ Resources:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Effect: "Allow"
+          -
+            Effect: "Allow"
             Principal:
               Service: "apigateway.amazonaws.com"
             Action:
@@ -274,11 +464,11 @@ Resources:
       Policies:
         - PolicyName: DDBCrudPolicy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               Action:
-                - dynamodb:DeleteItem
-                - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              - dynamodb:UpdateItem
               Effect: Allow
               Resource: !GetAtt LinkTable.Arn
 
@@ -304,30 +494,9 @@ Resources:
                 Action: "amplify:*"
                 Resource: "*"
 
-  ## CloudWatchRole for aws gateway account
-  Account:
-    Type: "AWS::ApiGateway::Account"
-    Properties:
-      CloudWatchRoleArn: !GetAtt CloudWatchRole.Arn
-
-  CloudWatchRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - apigateway.amazonaws.com
-            Action: "sts:AssumeRole"
-      Path: /
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
-
-  ###################################################################################################
-  ##   Metrics outputs                                                                            ##
-  ###################################################################################################
+###################################################################################################
+##   Metrics outputs                                                                            ##
+###################################################################################################
 
   NotifyTopic:
     Type: AWS::SNS::Topic
@@ -340,8 +509,8 @@ Resources:
       MetricName: "4XXError"
       Namespace: "AWS/ApiGateway"
       Dimensions:
-        - Name: "ApiName"
-          Value: "URL Shortener API"
+          - Name: "ApiName"
+            Value: "URL Shortener API"
       Statistic: "Average"
       Period: 60
       EvaluationPeriods: 1
@@ -358,8 +527,8 @@ Resources:
       MetricName: "5XXError"
       Namespace: "AWS/ApiGateway"
       Dimensions:
-        - Name: "ApiName"
-          Value: "URL Shortener API"
+          - Name: "ApiName"
+            Value: "URL Shortener API"
       Statistic: "Average"
       Period: 60
       EvaluationPeriods: 1
@@ -376,8 +545,8 @@ Resources:
       MetricName: "Latency"
       Namespace: "AWS/ApiGateway"
       Dimensions:
-        - Name: "ApiName"
-          Value: "URL Shortener API"
+          - Name: "ApiName"
+            Value: "URL Shortener API"
       ExtendedStatistic: "p99"
       Period: 300
       EvaluationPeriods: 1
@@ -394,8 +563,8 @@ Resources:
       MetricName: "SystemErrors"
       Namespace: "AWS/DynamoDB"
       Dimensions:
-        - Name: "TableName"
-          Value: !Ref LinkTable
+          - Name: "TableName"
+            Value: !Ref LinkTable
       Statistic: "Average"
       Period: 60
       EvaluationPeriods: 1
@@ -412,8 +581,8 @@ Resources:
       MetricName: "UserErrors"
       Namespace: "AWS/DynamoDB"
       Dimensions:
-        - Name: "TableName"
-          Value: !Ref LinkTable
+          - Name: "TableName"
+            Value: !Ref LinkTable
       Statistic: "Average"
       Period: 60
       EvaluationPeriods: 1
@@ -458,6 +627,7 @@ Resources:
       AlarmActions:
         - !Ref NotifyTopic
 
+
 ###################################################################################################
 ##   Template outputs                                                                            ##
 ###################################################################################################
@@ -481,7 +651,7 @@ Outputs:
 
   ClientDomainAddress:
     Description: Domain for client
-    Value: !Join [".", [https://master, !GetAtt AmplifyApp.DefaultDomain]]
+    Value: !Join [ ".", [ https://master, !GetAtt AmplifyApp.DefaultDomain ]]
 
   AmplifyAppId:
     Description: Amplify application ID
@@ -492,7 +662,7 @@ Outputs:
     Value: !Sub
       - aws amplify update-app --app-id ${AmplifyID} --environment-variables REACT_APP_NAME=${AppName},REACT_APP_CLIENT_ID=${UserPoolClient},REACT_APP_API_ROOT=${APIRoot},REACT_APP_AUTH_DOMAIN=${APIAuthDomain}
       - AmplifyID: !GetAtt AmplifyApp.AppId
-        APIRoot: !Join ["", ["https://", !GetAtt CloudFrontDistro.DomainName]]
+        APIRoot: !Join ["", [ "https://", !GetAtt CloudFrontDistro.DomainName]]
         APIAuthDomain: !Sub https://${AppName}-${AWS::AccountId}.auth.${AWS::Region}.amazoncognito.com
 
   AmplifyDeployCommand:
@@ -500,3 +670,11 @@ Outputs:
     Value: !Sub
       - aws amplify start-job --app-id ${AmplifyID} --branch-name master --job-type RELEASE
       - AmplifyID: !GetAtt AmplifyApp.AppId
+
+  S3BucketName:
+    Description: "Amazon S3 bucket name holding short URLs redirect objects. Note: the bucket will not be deleted when you delete this template."
+    Value: !Ref S3BucketForURLs
+
+  ConnectURL:
+    Description: URL to connect to the admin page of the URL Shortener. Do not use until you update the template with the API Gateway endpoint you need to manually create.
+    Value: !Sub "https://${CloudFrontDistro.DomainName}"

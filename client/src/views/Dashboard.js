@@ -1,18 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import {
-  addLink,
-  updateLink,
-  removeLink,
-  hydrateLinks,
-  drainLinks,
-  selectLinks,
-} from '../reducers/appSlice';
+import { hydrateLinks, drainLinks } from '../reducers/appSlice';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
 import axios from 'axios';
 
 function Dashboard() {
   const apiUrl = process.env.REACT_APP_API_ROOT;
+  const [shortUrl, setShortUrl] = useState('');
+  const [httpStatus, setHttpStatus] = useState('');
   const [modalIsActive, setModalIsActive] = useState(false);
   const [model, setModel] = useState({
     id: '',
@@ -21,12 +16,7 @@ function Dashboard() {
   const [currentLink, setCurrentLink] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [modalTypeCreate, setModalTypeCreate] = useState(true);
-  const links = useSelector(selectLinks);
   const dispatch = useDispatch();
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   function toggleModal(type, link = null, ind = 0) {
     let newModel = {
@@ -45,9 +35,44 @@ function Dashboard() {
     setModel(newModel);
   }
 
+  function submitEntry() {
+    axios
+      .post(
+        `${apiUrl}/admin_shrink_url`,
+        {
+          url_long: model.url,
+          cdn_prefix: 'bit-beta.ehealthapplications.com',
+        },
+        {
+          headers: {
+            Authorization: window.localStorage.getItem('cognitoIdentityToken'),
+          },
+        }
+      )
+      .then((response) => {
+        setShortUrl(response.data.url_short);
+        setHttpStatus(response.status);
+      })
+      .catch(() => {
+        // eslint-disable-next-line
+      //console.log(JSON.stringify(err));
+        alert(
+          "Short URL can't be created. Bad URL format or the session has timed out. Please refresh and try again."
+        );
+        setShortUrl('');
+        setHttpStatus(400);
+      });
+  }
+
+  function onCopy(e) {
+    alert('You just copied: ' + e.text);
+  }
+
+  function onError(e) {
+    alert('Failed to copy texts ' + e.text);
+  }
+
   function fetchData() {
-    dispatch(addLink({ id: 'CRY"', url: 'cry.com' }));
-    console.log(links);
     axios
       .get(`${apiUrl}/app`, {
         headers: {
@@ -58,186 +83,66 @@ function Dashboard() {
       .catch(() => dispatch(drainLinks()));
   }
 
-  function createLink() {
-    axios
-      .post(`${apiUrl}/app`, model, {
-        headers: {
-          Authorization: window.localStorage.getItem('cognitoIdentityToken'),
-        },
-      })
-      .then((response) => {
-        if (response.data.error) {
-          alert(response.data.message);
-        } else {
-          toggleModal();
-          dispatch(addLink(response.data));
-        }
-      })
-      .catch((err) => {
-        // eslint-disable-next-line
-        console.log(`POST to ${apiUrl}/app caught error ${err}`);
-        alert('Link cannot be created. Bad format.');
-      });
-  }
-
-  function updateLink() {
-    setCurrentLink((prevLink) => ({ ...prevLink, url: model.url }));
-    axios
-      .put(`${apiUrl}/app/${currentLink.id}`, currentLink, {
-        headers: {
-          Authorization: window.localStorage.getItem('cognitoIdentityToken'),
-        },
-      })
-      .then((response) => {
-        if (response.status === 200) {
-          toggleModal();
-          dispatch(updateLink(response.data, currentIndex));
-        } else {
-          alert('There was an issue deleting your link');
-        }
-      })
-      .catch(() => {
-        alert('There was an issue deleting your link');
-      });
-  }
-
-  function deleteLink(id, ind) {
-    if (window.confirm(`Are you sure you want to delete '${id}'`)) {
-      axios
-        .delete(`${apiUrl}/app/${id}`, {
-          headers: {
-            Authorization: window.localStorage.getItem('cognitoIdentityToken'),
-          },
-        })
-        .then((response) => {
-          if (response.status === 200) {
-            dispatch(removeLink(ind));
-          } else {
-            alert('There was an issue deleting your link');
-          }
-        })
-        .catch((err) => {
-          alert(err);
-        });
+  const onEnterHandler = (e) => {
+    if (e.key === 'Enter') {
+      submitEntry();
     }
-  }
+  };
+
+  const onChangeHandler = (e) => {
+    let val = e.target.value;
+
+    setModel((prevModel) => ({ ...prevModel, url: val }));
+  };
 
   return (
     <div className="dashboard">
-      <div className="columns is-mobile">
-        <div className="column">
-          <h1 className="title">Shortcuts</h1>
-        </div>
-        <div className="column is-2-desktop is-half-mobile">
-          <button
-            className="button is-info is-outlined is-fullwidth"
-            onClick={() => toggleModal('create')}
-          >
-            New Shortcut
-          </button>
-        </div>
-      </div>
-
-      <div className="columns is-multiline">
-        {links.map((link, i) => (
-          <div className="column is one-third" key={link.id}>
-            <div className="card">
-              <header className="card-header has-background-info">
-                <p className="card-header-title has-text-white">{link.id}</p>
-                <button className="card-header-icon" aria-label="more options">
-                  <span className="icon">
-                    <i className="fas fa-angle-down" aria-hidden="true"></i>
-                  </span>
-                </button>
-              </header>
-              <div className="card-content">
-                <div className="content">
-                  <div className="text-clip" title={link.url}>
-                    {link.url}
-                  </div>
-                  <div className="is-size-7">
-                    <time>{link.timestamp}</time>
-                  </div>
+      <div className="is-mobile">
+        <br />
+        <div className="field">
+          {httpStatus === 200 && (
+            <div>
+              <div className="alert alert-success">
+                <div>
+                  Successfully shortened: <br />
                 </div>
+                <div>{shortUrl}</div>
               </div>
-              <footer className="card-footer">
-                <button onClick={() => toggleModal('edit', link, i)} className="card-footer-item">
-                  Edit
-                </button>
-                <button onClick={() => deleteLink(link.id, i)} className="card-footer-item">
-                  Delete
-                </button>
-                <a
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  href={`${apiUrl}/${link.id}`}
-                  className="card-footer-item"
-                >
-                  Try it
-                </a>
-              </footer>
             </div>
+          )}
+          <div className="control" style={{ marginBottom: '20px' }}>
+            <input
+              className="input"
+              type="text"
+              value={model.url}
+              onKeyUp={onEnterHandler}
+              onChange={onChangeHandler}
+              placeholder="Paste Long Url (Ex: https://mylink.com)"
+              required
+            />
           </div>
-        ))}
-      </div>
-
-      {/* Edit Modal */}
-      <div className={`${modalIsActive ? 'is-active' : ''} modal`}>
-        <div className="modal-background"></div>
-        <div className="modal-card">
-          <header className="modal-card-head">
-            <p className="modal-card-title">
-              {modalTypeCreate ? <span>Create</span> : <span>Update</span>} Link
-            </p>
-            <button className="delete" onClick={() => toggleModal()} aria-label="close"></button>
-          </header>
-          <section className="modal-card-body">
-            <div className="field">
-              <div className="control">
-                <input
-                  className="input"
-                  value={model.id}
-                  onChange={(e) => setModel({ ...model, id: e.target.value })}
-                  type="text"
-                  placeholder="Short Link"
-                  required
-                  disabled={!modalTypeCreate}
-                />
-              </div>
-            </div>
-            <div className="field">
-              <div className="control">
-                <input
-                  className="input"
-                  value={model.url}
-                  onChange={(e) => setModel({ ...model, url: e.target.value })}
-                  type="text"
-                  placeholder="Url (Ex: http://mylink.com)"
-                  required
-                />
-              </div>
-            </div>
-            {!modalTypeCreate && (
-              <p className="is-italic has-text-info is-size-7">
-                Note: Updates take a minimum of 5 minutes to propogate. You may also need to clear
-                your local cache.
-              </p>
-            )}
-          </section>
-          <footer className="modal-card-foot">
-            {modalTypeCreate ? (
-              <button onClick={createLink} className="button is-success">
-                Create
+          <div>
+            <div style={{ display: 'inline-block' }}>
+              <button
+                type="submit"
+                className="btn btn-success"
+                style={{ marginRight: '10px' }}
+                id="url_input_submit"
+                onClick={submitEntry}
+              >
+                Shorten
               </button>
-            ) : (
-              <button onClick={updateLink} className="button is-success">
-                Update
-              </button>
+            </div>
+            {httpStatus === 200 && (
+              <div style={{ display: 'inline-block' }}>
+                <CopyToClipboard text={shortUrl} onCopy={onCopy}>
+                  <button type="button" className="btn btn-success">
+                    Copy
+                  </button>
+                </CopyToClipboard>
+              </div>
             )}
-            <button className="button" onClick={toggleModal}>
-              Cancel
-            </button>
-          </footer>
+          </div>
         </div>
       </div>
     </div>
