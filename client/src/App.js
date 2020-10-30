@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { authorize, deauthorize, selectAuthorized } from './reducers/appSlice';
-import { Switch, Route, Link, useLocation, useHistory } from 'react-router-dom';
+import { useLocation, useHistory } from 'react-router-dom';
 import Dashboard from './views/Dashboard';
 import axios from 'axios';
 import './App.css';
@@ -129,12 +129,6 @@ function App() {
           </div>
 
           <div id="navbarCollapse" className="navbar-menu">
-            {/* <div className="navbar-start">
-              <Link className="navbar-item" to="/">
-                Dashboard
-              </Link>
-            </div> */}
-
             <div className="navbar-end">
               {authorized && (
                 <a className="navbar-item" onClick={logout} href={logOutUrl}>
@@ -159,11 +153,7 @@ function App() {
         <div className="container">
           {authorized && (
             <div>
-              <Switch>
-                <Route exact path="/">
-                  <Dashboard />
-                </Route>
-              </Switch>
+              <Dashboard />
             </div>
           )}
           {!authorized && (

@@ -26,7 +26,7 @@ export const appSlice = createSlice({
       state.links.splice(ind, 1);
     },
     updateLink: (state, link, ind) => {
-      state.links[ind] = link.payload;
+      Object.assign([], state.links, { [ind]: link });
     },
   },
 });

@@ -8,7 +8,6 @@ import {
   drainLinks,
   selectLinks,
 } from '../reducers/appSlice';
-import { CopyToClipboard } from 'react-copy-to-clipboard';
 import axios from 'axios';
 
 function Dashboard() {
@@ -46,8 +45,6 @@ function Dashboard() {
   }
 
   function fetchData() {
-    dispatch(addLink({ id: 'CRY"', url: 'cry.com' }));
-    console.log(links);
     axios
       .get(`${apiUrl}/app`, {
         headers: {
@@ -80,10 +77,11 @@ function Dashboard() {
       });
   }
 
-  function updateLink() {
+  function _updateLink() {
     setCurrentLink((prevLink) => ({ ...prevLink, url: model.url }));
+    let tempLink = { ...currentLink, url: model.url };
     axios
-      .put(`${apiUrl}/app/${currentLink.id}`, currentLink, {
+      .put(`${apiUrl}/app/${tempLink.id}`, tempLink, {
         headers: {
           Authorization: window.localStorage.getItem('cognitoIdentityToken'),
         },
@@ -93,11 +91,11 @@ function Dashboard() {
           toggleModal();
           dispatch(updateLink(response.data, currentIndex));
         } else {
-          alert('There was an issue deleting your link');
+          alert('There was an issue updating your link.');
         }
       })
-      .catch(() => {
-        alert('There was an issue deleting your link');
+      .catch((err) => {
+        alert('There was an issue updating your link. ' + err);
       });
   }
 
@@ -113,7 +111,7 @@ function Dashboard() {
           if (response.status === 200) {
             dispatch(removeLink(ind));
           } else {
-            alert('There was an issue deleting your link');
+            alert('There was an issue deleting your link.');
           }
         })
         .catch((err) => {
@@ -144,11 +142,11 @@ function Dashboard() {
             <div className="card">
               <header className="card-header has-background-info">
                 <p className="card-header-title has-text-white">{link.id}</p>
-                <button className="card-header-icon" aria-label="more options">
+                {/* <button className="card-header-icon" aria-label="more options">
                   <span className="icon">
                     <i className="fas fa-angle-down" aria-hidden="true"></i>
                   </span>
-                </button>
+                </button> */}
               </header>
               <div className="card-content">
                 <div className="content">
@@ -219,7 +217,7 @@ function Dashboard() {
             </div>
             {!modalTypeCreate && (
               <p className="is-italic has-text-info is-size-7">
-                Note: Updates take a minimum of 5 minutes to propogate. You may also need to clear
+                Note: Updates take a minimum of 5 minutes to propagate. You may also need to clear
                 your local cache.
               </p>
             )}
@@ -230,7 +228,7 @@ function Dashboard() {
                 Create
               </button>
             ) : (
-              <button onClick={updateLink} className="button is-success">
+              <button onClick={_updateLink} className="button is-success">
                 Update
               </button>
             )}
