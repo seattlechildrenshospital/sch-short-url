@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { authorize, deauthorize, selectAuthorized } from './reducers/appSlice';
-import { useLocation, useHistory } from 'react-router-dom';
 import Dashboard from './views/Dashboard';
 import axios from 'axios';
 import './App.css';
@@ -17,24 +14,16 @@ const redUrl = window.location.origin;
 function App() {
   const appName = "Seattle Children's Private URL Shortener";
   const [isOpen, setIsOpen] = useState(false);
-  const authorized = useSelector(selectAuthorized);
-  const dispatch = useDispatch();
+  const [authorized, setAuthorized] = useState(false);
   const linkNotFound = lnf;
-  const signUpUrl = `${authDomain}/signup?response_type=code&client_id=${clientId}&redirect_uri=${redUrl}`;
-  const logInUrl = `${authDomain}/login?response_type=code&client_id=${clientId}&redirect_uri=${redUrl}`;
+  const signUpUrl = `${authDomain}/signup?response_type=code&scope=email+openid+test/link.get+test/link.post&client_id=${clientId}&redirect_uri=${redUrl}`;
+  const logInUrl = `${authDomain}/login?response_type=code&scope=email+openid+test/link.get+test/link.post&client_id=${clientId}&redirect_uri=${redUrl}`;
   const logOutUrl = `${authDomain}/logout?client_id=${clientId}&logout_uri=${redUrl}`;
 
   useEffect(() => {
     if (cognitoCode) exchangeToken();
     else exchangeRefreshToken();
   }, []);
-
-  const useQuery = () => {
-    return new URLSearchParams(useLocation().search);
-  };
-
-  let history = useHistory();
-  let query = useQuery();
 
   const convertJSON = (json) => {
     const oAuthTokenBodyArray = Object.entries(json).map(([key, value]) => {
@@ -61,10 +50,10 @@ function App() {
         let json_1 = response.data;
         if (json_1.id_token) {
           localStorage.setItem('cognitoIdentityToken', json_1.id_token);
-          dispatch(authorize());
+          setAuthorized(true);
         }
       } catch (e) {
-        dispatch(deauthorize());
+        setAuthorized(false);
       }
     } else {
       return new Promise((res) => {
@@ -90,13 +79,10 @@ function App() {
       if (json_1.id_token) {
         localStorage.setItem('cognitoIdentityToken', json_1.id_token);
         localStorage.setItem('cognitoRefreshToken', json_1.refresh_token);
-        dispatch(authorize());
+        setAuthorized(true);
       }
-      let newQuery = Object.assign({}, query);
-      delete newQuery.code;
-      history.replace({ newQuery });
     } catch (e) {
-      dispatch(deauthorize());
+      setAuthorized(false);
     }
   };
 

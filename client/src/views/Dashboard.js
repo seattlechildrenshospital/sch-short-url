@@ -1,13 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import {
-  addLink,
-  updateLink,
-  removeLink,
-  hydrateLinks,
-  drainLinks,
-  selectLinks,
-} from '../reducers/appSlice';
 import axios from 'axios';
 
 function Dashboard() {
@@ -20,8 +11,7 @@ function Dashboard() {
   const [currentLink, setCurrentLink] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [modalTypeCreate, setModalTypeCreate] = useState(true);
-  const links = useSelector(selectLinks);
-  const dispatch = useDispatch();
+  const [links, setLinks] = useState([]);
 
   useEffect(() => {
     fetchData();
@@ -51,8 +41,8 @@ function Dashboard() {
           Authorization: window.localStorage.getItem('cognitoIdentityToken'),
         },
       })
-      .then((response) => dispatch(hydrateLinks(response.data)))
-      .catch(() => dispatch(drainLinks()));
+      .then((response) => setLinks(response.data))
+      .catch(() => setLinks([]));
   }
 
   function createLink() {
@@ -67,7 +57,8 @@ function Dashboard() {
           alert(response.data.message);
         } else {
           toggleModal();
-          dispatch(addLink(response.data));
+          let newLinks = [...links, response.data];
+          setLinks(newLinks);
         }
       })
       .catch((err) => {
@@ -77,7 +68,7 @@ function Dashboard() {
       });
   }
 
-  function _updateLink() {
+  function updateLink() {
     setCurrentLink((prevLink) => ({ ...prevLink, url: model.url }));
     let tempLink = { ...currentLink, url: model.url };
     axios
@@ -89,7 +80,8 @@ function Dashboard() {
       .then((response) => {
         if (response.status === 200) {
           toggleModal();
-          dispatch(updateLink(response.data, currentIndex));
+          let newLinks = Object.assign([], links, { [currentIndex]: tempLink });
+          setLinks(newLinks);
         } else {
           alert('There was an issue updating your link.');
         }
@@ -109,7 +101,9 @@ function Dashboard() {
         })
         .then((response) => {
           if (response.status === 200) {
-            dispatch(removeLink(ind));
+            let newLinks = [...links];
+            newLinks.splice(ind, 1);
+            setLinks(newLinks);
           } else {
             alert('There was an issue deleting your link.');
           }
@@ -228,7 +222,7 @@ function Dashboard() {
                 Create
               </button>
             ) : (
-              <button onClick={_updateLink} className="button is-success">
+              <button onClick={updateLink} className="button is-success">
                 Update
               </button>
             )}
