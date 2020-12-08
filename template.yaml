@@ -25,7 +25,7 @@ Parameters:
   AppName:
     Type: String
     Description: Name of application (no spaces). Value must be globally unique
-    Default: SCH-url-shortener
+    Default: sch-url-shortener
   UseLocalClient:
     Type: String
     Description: Enables public client and local client for testing. (Less secure)
@@ -121,15 +121,15 @@ Resources:
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
-      Domain: !Sub ${AppName}-${AWS::AccountId}
+      Domain: !Sub ${AppName}
       UserPoolId: !Ref UserPool
 
   ##   Cognito user pool client
-  UserPoolClient:
+  UserPoolClientUI:
     Type: AWS::Cognito::UserPoolClient
     Properties:
       UserPoolId: !Ref UserPool
-      ClientName: !Sub ${AppName}-UserPoolClient
+      ClientName: !Sub ${AppName}-UserPoolClientUI
       GenerateSecret: false
       SupportedIdentityProviders:
         - COGNITO
@@ -147,6 +147,44 @@ Resources:
       AllowedOAuthScopes:
         - email
         - openid
+        - links/link.get
+        - links/link.post
+
+  ##   Cognito user pool client for client-credentials
+  UserPoolClientBot:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: !Sub ${AppName}-UserPoolClientBot
+      GenerateSecret: true
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs:
+        - !Join [".", [https://master, !GetAtt AmplifyApp.DefaultDomain]]
+        - !If [IsLocal, http://localhost:3000, !Ref "AWS::NoValue"]
+        - !If [HasCustomDomain, !Ref CustomDomain, !Ref "AWS::NoValue"]
+      LogoutURLs:
+        - !Join [".", [https://master, !GetAtt AmplifyApp.DefaultDomain]]
+        - !If [IsLocal, http://localhost:3000, !Ref "AWS::NoValue"]
+        - !If [HasCustomDomain, !Ref CustomDomain, !Ref "AWS::NoValue"]
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - client_credentials
+      AllowedOAuthScopes:
+        - links/link.get
+        - links/link.post
+
+  UserPoolResourceServer:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties:
+      Identifier: links
+      Name: Links
+      Scopes: 
+        - ScopeDescription: Retrieve a web resource
+          ScopeName: link.get
+        - ScopeDescription: Post a web resource
+          ScopeName: link.post
+      UserPoolId: !Ref UserPool
 
   ##   CloudFront distribution
   CloudFrontDistro:
@@ -473,11 +511,15 @@ Outputs:
 
   ReactAppAuthDomain:
     Description: Domain used for authentication
-    Value: !Sub https://${AppName}-${AWS::AccountId}.auth.${AWS::Region}.amazoncognito.com
+    Value: !Sub https://${AppName}.auth.${AWS::Region}.amazoncognito.com
 
   ReactAppClientId:
     Description: Cognito User Pool Client Id
-    Value: !Ref UserPoolClient
+    Value: !Ref UserPoolClientUI
+    
+  BotClientId:
+    Description: Machine to machine client ID
+    Value: !Ref UserPoolClientBot
 
   ClientDomainAddress:
     Description: Domain for client
@@ -490,10 +532,10 @@ Outputs:
   AmplifyEnvironmentUpdateCommand:
     Description: Command to add environment variables to the Amplify application
     Value: !Sub
-      - aws amplify update-app --app-id ${AmplifyID} --environment-variables REACT_APP_NAME=${AppName},REACT_APP_CLIENT_ID=${UserPoolClient},REACT_APP_API_ROOT=${APIRoot},REACT_APP_AUTH_DOMAIN=${APIAuthDomain}
+      - aws amplify update-app --app-id ${AmplifyID} --environment-variables REACT_APP_NAME=${AppName},REACT_APP_CLIENT_ID=${UserPoolClientUI},REACT_APP_API_ROOT=${APIRoot},REACT_APP_AUTH_DOMAIN=${APIAuthDomain}
       - AmplifyID: !GetAtt AmplifyApp.AppId
         APIRoot: !Join ["", ["https://", !GetAtt CloudFrontDistro.DomainName]]
-        APIAuthDomain: !Sub https://${AppName}-${AWS::AccountId}.auth.${AWS::Region}.amazoncognito.com
+        APIAuthDomain: !Sub https://${AppName}.auth.${AWS::Region}.amazoncognito.com
 
   AmplifyDeployCommand:
     Description: Command to deploy the Amplify application

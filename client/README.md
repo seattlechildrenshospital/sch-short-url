@@ -15,7 +15,7 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. -->
 
 # URL Shortener Client
-This application is a simple Vuejs application that interacts with the functionless url shortener.
+This application is a simple React application that interacts with the functionless url shortener.
 
 ![Personal access token scopes](../assets/client.png)
 

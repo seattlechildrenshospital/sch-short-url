@@ -15,7 +15,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. -->
 
 # SCH URL Shortener
-This app will create a shortened URL using S3 redirect features.
+This app will create a shortened URL using API Gateway with DynamoDB integration features.
 
 For more information about the url shortener read the following blogs:
 1. [Private URL Shortener](https://aws.amazon.com/blogs/compute/build-a-serverless-private-url-shortener/)
@@ -31,7 +31,6 @@ For more information about the url shortener read the following blogs:
 * <a href="https://aws.amazon.com/lambda/" target="_bank">Amazon Lambda</a>
 * <a href="https://aws.amazon.com/amplify/console/" target="_blank">AWS Amplify Console</a>
 * <a href="https://aws.amazon.com/cloudfront/" target="_blank">Amazon CloudFront</a> *Will cause a lengthy deployment time. See note under **Deploying**
-* <a href="https://aws.amazon.com/s3/" target="_blank">Amazon S3</a>
 
 
 ### Requirements for deployment
@@ -152,3 +151,52 @@ aws amplify get-job --app-id <MyAmplifyAppId> --branch-name master --job-id <Job
 1. Select **Delete stack** to confirm
 
 *Note: If you opted to have access logs (on by default), you may have to delete the S3 bucket manually.
+
+---
+## API Reference
+
+### Authentication
+Use client credentials to obtain bearer access token. Include token in Authorization header with all API requests.
+
+To obtain token `POST https://<cognito-url>/oauth2/token` with
+1. Authorization header: `Basic {base64-encoded(clientId:clientSecret)}`
+1. Content-type: `x-www-form-urlencoded`
+1. Request body: `grant-type:client-credentials`
+
+### Get all shortened links
+`GET /app`
+
+### Add a shortened link
+`POST /app`
+
+*JSON data:*
+```
+{ 'id': short_id, 'url': url }
+```
+
+### Update a shortened link
+`PUT /app/{linkId}`
+
+*JSON data:*
+```
+{
+  "owner" : {
+    "type" : "string"
+  },
+  "id" : {
+    "type" : "string"
+  },
+  "url" : {
+    "type" : "string"
+  },
+  "timestamp" : {
+    "type" : "string"
+  }
+}
+```
+
+### Delete a shortened link
+`DELETE /app/{linkId}`
+
+### Access a link
+`GET /{linkId}` or simply enter into browser to be redirected.

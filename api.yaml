@@ -79,7 +79,8 @@ paths:
     get:
       summary: Fetch all links for authenticated user
       security:
-      - UserAuthorizer: []
+      - UserAuthorizer:
+        - "links/link.get"
       parameters:
         - $ref: '#/components/parameters/authHeader'
       responses:
@@ -99,7 +100,8 @@ paths:
         uri: {"Fn::Sub":"arn:aws:apigateway:${AWS::Region}:dynamodb:action/Query"}
         httpMethod: "POST"
         requestTemplates:
-          application/json: { "Fn::Sub": "{\"TableName\": \"${LinkTable}\", \
+          application/json:
+           { "Fn::Sub": "{\"TableName\": \"${LinkTable}\", \
             \"IndexName\":\"OwnerIndex\",\"KeyConditionExpression\": \"#n_owner = :v_owner\", \
             \"ExpressionAttributeValues\": \
             {\":v_owner\": {\"S\": \"$context.authorizer.claims.email\"}},\"ExpressionAttributeNames\": {\"#n_owner\": \"owner\"}}"}
@@ -125,7 +127,8 @@ paths:
     post:
       summary: Create new url
       security:
-      - UserAuthorizer: []
+      - UserAuthorizer:
+        - "links/link.post"
       x-amazon-apigateway-request-validator: body
       parameters:
         - $ref: '#/components/parameters/authHeader'
